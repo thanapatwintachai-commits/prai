@@ -2,9 +2,12 @@ from flask import Flask, render_template, request
 import pandas as pd
 import plotly.express as px
 import plotly.io as pio
+import os
 import io
 
-app = Flask(__name__, template_folder='../templates')
+# กำหนด Absolute path ให้ templates ชัวร์ที่สุดบน Serverless
+template_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'templates'))
+app = Flask(__name__, template_folder=template_dir)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -26,5 +29,5 @@ def index():
                 
     return render_template('index.html', graphJSON=graphJSON)
 
-if __name__ == '__main__':
-    app.run(debug=True)
+# Export ตัวแปร app ให้ Vercel ดึงไปรัน
+app = app
