@@ -5,7 +5,7 @@ import plotly.io as pio
 import os
 import io
 
-# สั่งถอยออกจากโฟลเดอร์ api เพื่อให้เจอโฟลเดอร์ templates
+# กำหนด Path ให้ถอยออกจากโฟลเดอร์ api ไปยัง templates ใน Root Directory
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 template_dir = os.path.join(base_dir, 'templates')
 
@@ -20,13 +20,23 @@ def index():
         file = request.files.get('file')
         
         if file and file.filename != '':
-            if not file.filename.lower().endswith('.csv'):
+            filename = file.filename.lower().strip()
+            
+            # เช็กว่าไฟล์ลงท้ายด้วย .csv หรือไม่ (รวมถึงรองรับชื่อไฟล์แปลกๆ)
+            if not filename.endswith('.csv'):
                 flash('กรุณาอัปโหลดไฟล์ประเภท .csv เท่านั้น', 'danger')
                 return render_template('index.html', graphJSON=graphJSON)
 
             try:
+                # อ่านไฟล์ด้วย BytesIO
                 file_bytes = io.BytesIO(file.read())
-                df = pd.read_csv(file_bytes)
+                
+                # อ่าน CSV โดยใช้ encoding=utf-8 หรือ latin-1 สำรองถ้ามีภาษาไทย
+                try:
+                    df = pd.read_csv(file_bytes, encoding='utf-8')
+                except UnicodeDecodeError:
+                    file_bytes.seek(0)
+                    df = pd.read_csv(file_bytes, encoding='tis-620')
 
                 if df.empty or len(df.columns) == 0:
                     flash('ไฟล์ CSV ไม่มีข้อมูลหรือไม่ถูกต้อง', 'warning')
@@ -42,7 +52,7 @@ def index():
 
             except Exception as e:
                 print(f"Error processing CSV: {e}")
-                flash('เกิดข้อผิดพลาดในการอ่านไฟล์ CSV กรุณาตรวจสอบรูปแบบไฟล์', 'danger')
+                flash(f'เกิดข้อผิดพลาดในการอ่านไฟล์: {str(e)}', 'danger')
         else:
             flash('กรุณาเลือกไฟล์ CSV ก่อนส่งข้อมูล', 'warning')
                 
