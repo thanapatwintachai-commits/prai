@@ -5,7 +5,7 @@ import plotly.io as pio
 import os
 import io
 
-# กำหนด Path ให้ถอยออกจากโฟลเดอร์ api ไปยัง templates ใน Root Directory
+# กำหนด Path ให้ถอยออกจาก api ไปยัง templates
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 template_dir = os.path.join(base_dir, 'templates')
 
@@ -17,21 +17,14 @@ def index():
     graphJSON = None
     
     if request.method == 'POST':
+        # ดึงไฟล์จากฟอร์ม
         file = request.files.get('file')
         
         if file and file.filename != '':
-            filename = file.filename.lower().strip()
-            
-            # เช็กว่าไฟล์ลงท้ายด้วย .csv หรือไม่ (รวมถึงรองรับชื่อไฟล์แปลกๆ)
-            if not filename.endswith('.csv'):
-                flash('กรุณาอัปโหลดไฟล์ประเภท .csv เท่านั้น', 'danger')
-                return render_template('index.html', graphJSON=graphJSON)
-
             try:
-                # อ่านไฟล์ด้วย BytesIO
+                # อ่านไฟล์ด้วย pandas โดยตรง
                 file_bytes = io.BytesIO(file.read())
                 
-                # อ่าน CSV โดยใช้ encoding=utf-8 หรือ latin-1 สำรองถ้ามีภาษาไทย
                 try:
                     df = pd.read_csv(file_bytes, encoding='utf-8')
                 except UnicodeDecodeError:
@@ -52,9 +45,9 @@ def index():
 
             except Exception as e:
                 print(f"Error processing CSV: {e}")
-                flash(f'เกิดข้อผิดพลาดในการอ่านไฟล์: {str(e)}', 'danger')
+                flash('ไม่สามารถอ่านไฟล์ได้ กรุณาตรวจสอบว่าเป็นไฟล์ CSV ที่ถูกต้อง', 'danger')
         else:
-            flash('กรุณาเลือกไฟล์ CSV ก่อนส่งข้อมูล', 'warning')
+            flash('กรุณาเลือกไฟล์ก่อนกดส่งข้อมูล', 'warning')
                 
     return render_template('index.html', graphJSON=graphJSON)
 
