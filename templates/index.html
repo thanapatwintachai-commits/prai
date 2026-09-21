@@ -3,34 +3,185 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CSV Histogram Visualizer</title>
-    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <title>สร้าง Histogram จากไฟล์ CSV</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
+    <style>
+        :root {
+            --bg: #f6f7f9;
+            --surface: #ffffff;
+            --text: #1b2430;
+            --muted: #5d6b7c;
+            --line: #d9dee5;
+            --accent: #1f5fbf;
+            --accent-dark: #174a97;
+            --error-bg: #fdecec;
+            --error-text: #a12626;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: "IBM Plex Sans Thai", system-ui, -apple-system, "Segoe UI", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+        }
+        main { max-width: 860px; margin: 0 auto; padding: 40px 20px 64px; }
+        h1 { font-size: 1.6rem; font-weight: 600; margin: 0 0 4px; }
+        .lead { color: var(--muted); margin: 0 0 24px; }
+
+        .panel {
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+        .field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 220px; min-width: 0; }
+        label { font-size: 0.9rem; font-weight: 500; }
+        input[type=file], select {
+            font: inherit;
+            padding: 8px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: #fff;
+            width: 100%;
+        }
+        button {
+            font: inherit;
+            font-weight: 500;
+            padding: 9px 20px;
+            border: 0;
+            border-radius: 6px;
+            background: var(--accent);
+            color: #fff;
+            cursor: pointer;
+        }
+        button:hover { background: var(--accent-dark); }
+        button:disabled { opacity: .6; cursor: wait; }
+        :focus-visible { outline: 3px solid #8ab4f8; outline-offset: 2px; }
+
+        #message {
+            margin-top: 16px;
+            padding: 10px 14px;
+            border-radius: 6px;
+            background: var(--error-bg);
+            color: var(--error-text);
+        }
+        #message[hidden] { display: none; }
+        #result { margin-top: 24px; }
+        #result[hidden] { display: none; }
+        #meta { color: var(--muted); font-size: 0.9rem; margin: 0 0 8px; }
+        #chart { width: 100%; min-height: 420px; }
+    </style>
 </head>
 <body>
-    <h2>อัปโหลดไฟล์ CSV เพื่อสร้างกราฟ</h2>
+<main>
+    <h1>สร้าง Histogram จากไฟล์ CSV</h1>
+    <p class="lead">เลือกไฟล์ CSV (ไม่เกิน 4 MB) แล้วเลือกคอลัมน์ที่ต้องการดูการกระจายของข้อมูล</p>
 
-    <form action="/" method="POST" enctype="multipart/form-data">
-        <input type="file" name="file" accept=".csv" required>
-        <button type="submit">แสดงผลกราฟ</button>
+    <form id="upload-form" class="panel" novalidate>
+        <div class="row">
+            <div class="field">
+                <label for="file">ไฟล์ CSV</label>
+                <input type="file" id="file" name="file" accept=".csv,text/csv" required>
+            </div>
+            <div class="field" id="column-field" hidden>
+                <label for="column">คอลัมน์</label>
+                <select id="column" name="column"></select>
+            </div>
+            <button type="submit" id="submit-btn">แสดงกราฟ</button>
+        </div>
+        <div id="message" role="alert" hidden></div>
     </form>
 
-    {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <p style="color: red; margin-top: 10px;">{{ message }}</p>
-        {% endfor %}
-      {% endif %}
-    {% endwith %}
+    <section id="result" hidden aria-live="polite">
+        <p id="meta"></p>
+        <div id="chart"></div>
+    </section>
+</main>
 
-    <hr>
+<script>
+(function () {
+    var form = document.getElementById('upload-form');
+    var fileInput = document.getElementById('file');
+    var columnField = document.getElementById('column-field');
+    var columnSelect = document.getElementById('column');
+    var submitBtn = document.getElementById('submit-btn');
+    var message = document.getElementById('message');
+    var result = document.getElementById('result');
+    var meta = document.getElementById('meta');
 
-    <div id="chart"></div>
+    function showError(text) {
+        message.textContent = text;
+        message.hidden = false;
+    }
 
-    {% if graphJSON %}
-    <script type="text/javascript">
-        var graphData = {{ graphJSON | safe }};
-        Plotly.newPlot('chart', graphData.data, graphData.layout);
-    </script>
-    {% endif %}
+    function send(column) {
+        var file = fileInput.files[0];
+        if (!file) {
+            showError('กรุณาเลือกไฟล์ CSV ก่อน');
+            return;
+        }
+        message.hidden = true;
+        submitBtn.disabled = true;
+
+        var data = new FormData();
+        data.append('file', file);
+        if (column) data.append('column', column);
+
+        fetch('/analyze', { method: 'POST', body: data })
+            .then(function (res) {
+                return res.json().catch(function () { return {}; }).then(function (body) {
+                    if (!res.ok) throw new Error(body.error || 'เกิดข้อผิดพลาด กรุณาลองใหม่');
+                    return body;
+                });
+            })
+            .then(function (body) {
+                // สร้างรายการคอลัมน์ใหม่เมื่อเป็นไฟล์ใหม่
+                if (!column) {
+                    columnSelect.innerHTML = '';
+                    body.columns.forEach(function (name) {
+                        var opt = document.createElement('option');
+                        opt.value = name;
+                        opt.textContent = name;
+                        columnSelect.appendChild(opt);
+                    });
+                }
+                columnSelect.value = body.column;
+                columnField.hidden = false;
+
+                var fig = JSON.parse(body.graph);
+                result.hidden = false;
+                meta.textContent = 'จำนวนแถว: ' + body.rows.toLocaleString('th-TH') +
+                                   ' | จำนวนคอลัมน์: ' + body.columns.length;
+                Plotly.react('chart', fig.data, fig.layout, { responsive: true });
+            })
+            .catch(function (err) {
+                showError(err.message);
+            })
+            .finally(function () {
+                submitBtn.disabled = false;
+            });
+    }
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        send(null);            // ไฟล์ใหม่: ให้เซิร์ฟเวอร์เลือกคอลัมน์เริ่มต้น
+    });
+
+    columnSelect.addEventListener('change', function () {
+        send(columnSelect.value);
+    });
+
+    fileInput.addEventListener('change', function () {
+        columnField.hidden = true;
+        result.hidden = true;
+        message.hidden = true;
+    });
+})();
+</script>
 </body>
 </html>
