@@ -21,7 +21,7 @@ def index():
                 # สร้างกราฟ Histogram จากคอลัมน์แรก
                 fig = px.histogram(df, x=df.columns[0])
                 
-                # แปลงกราฟเป็น JSON string แบบสมบูรณ์
+                # แปลงกราฟเป็น JSON string
                 graphJSON = pio.to_json(fig)
             except Exception as e:
                 print(f"Error processing CSV: {e}")
